@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temporizador HIIT</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #10131a;
+      --panel: #1a202b;
+      --panel-2: #242d3b;
+      --text: #f4f7fb;
+      --muted: #aeb8c7;
+      --accent: #65e6b4;
+      --border: #354052;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at top, #1b2635 0%, var(--bg) 65%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .app { width: min(760px, 100%); }
+    h1 { margin: 0 0 8px; font-size: clamp(1.8rem, 4vw, 2.5rem); }
+    .subtitle { margin: 0 0 26px; color: var(--muted); }
+    .panel {
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: clamp(18px, 4vw, 30px);
+      box-shadow: 0 18px 55px #0003;
+    }
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    label { font-weight: 650; }
+    .hint { color: var(--muted); font-size: .85rem; }
+    input {
+      width: 100%;
+      background: #0f141c;
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px;
+      font: inherit;
+      font-size: 1.05rem;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .total {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      background: var(--panel-2);
+      border-radius: 14px;
+      margin: 24px 0 18px;
+      padding: 18px;
+    }
+    .total strong { font-size: clamp(1.45rem, 4vw, 2rem); font-variant-numeric: tabular-nums; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 18px;
+      background: var(--accent);
+      color: #10221c;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }
+    button.secondary { background: #303b4c; color: var(--text); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .error { color: #ff9f9f; min-height: 1.4em; margin-top: 10px; }
+    [hidden] { display: none !important; }
+
+    .timer-screen {
+    text-align: center;
+    transition: background-color 250ms ease;
+    }
+    .timer-screen.phase-prep {
+        background-color: #123f78;
+        border-color: #4d9dff;
+        .phase {color: #4d9dff;}
+    }
+    .timer-screen.phase-work {
+        background-color: #145b38;
+        border-color: #48d597;
+        .phase {color: #48d597;}
+    }
+    .timer-screen.phase-rest {
+        background-color: #7b2028;
+        border-color: #ff6974;
+        .phase {color: #ff6974;}
+    }
+    .phase {
+      display: inline-block;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      color: var(--accent);
+      font-weight: 800;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+      font-size: .85rem;
+    }
+    .clock {
+      font-size: clamp(4rem, 17vw, 9rem);
+      line-height: 1.1;
+      font-weight: 800;
+      letter-spacing: -.06em;
+      font-variant-numeric: tabular-nums;
+      margin: 24px 0 14px;
+    }
+    .details { color: var(--muted); font-size: 1.05rem; min-height: 1.6em; }
+    .progress-track { height: 8px; background: #303b4c; border-radius: 99px; overflow: hidden; margin: 28px 0 8px; }
+    .progress-bar { height: 100%; width: 0; background: var(--accent); transition: width .15s linear; }
+    .progress-label { color: var(--muted); font-size: .9rem; }
+    .timer-screen .buttons { justify-content: center; }
+    @media (max-width: 560px) {
+      body { padding: 14px; }
+      .fields { grid-template-columns: 1fr; gap: 14px; }
+      .total { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section id="setupScreen">
+      <h1>Entrenamiento HIIT</h1>
+      <p class="subtitle">Configura los intervalos y consulta la duración total antes de empezar.</p>
+
+      <div class="panel">
+        <div class="fields">
+          <div class="field">
+            <label for="prep">Tiempo de preparación</label>
+            <input id="prep" type="text" inputmode="numeric" value="00:10" placeholder="mm:ss" aria-describedby="timeHint">
+            <span class="hint" id="timeHint">Formato mm:ss (por ejemplo, 01:30).</span>
+          </div>
+          <div class="field">
+            <label for="work">Tiempo de entrenamiento</label>
+            <input id="work" type="text" inputmode="numeric" value="00:30" placeholder="mm:ss">
+          </div>
+          <div class="field">
+            <label for="restRound">Descanso entre rondas</label>
+            <input id="restRound" type="text" inputmode="numeric" value="00:15" placeholder="mm:ss">
+          </div>
+          <div class="field">
+            <label for="rounds">Cantidad de rondas por ciclo</label>
+            <input id="rounds" type="number" min="1" step="1" value="8">
+          </div>
+          <div class="field">
+            <label for="restCycle">Descanso entre ciclos</label>
+            <input id="restCycle" type="text" inputmode="numeric" value="01:00" placeholder="mm:ss">
+          </div>
+          <div class="field">
+            <label for="cycles">Cantidad de ciclos</label>
+            <input id="cycles" type="number" min="1" step="1" value="3">
+          </div>
+        </div>
+
+        <div class="total">
+          <div>
+            <div class="hint">Tiempo total de entrenamiento</div>
+            <div class="hint" id="totalBreakdown">Incluye preparación y todos los descansos.</div>
+          </div>
+          <strong id="totalTime">00:00</strong>
+        </div>
+        <div id="setupError" class="error" role="alert"></div>
+        <div class="buttons">
+          <button id="startButton">Empezar entrenamiento</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="timerScreen" class="panel timer-screen" hidden aria-live="polite">
+      <h1>Entrenamiento HIIT</h1>
+      <div class="phase" id="phaseName">Preparación</div>
+      <div class="clock" id="clock">00:10</div>
+      <div class="details" id="phaseDetails">Prepárate para empezar</div>
+      <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="progress-label" id="progressLabel">Tiempo total: 00:00 / 00:00</div>
+      <div class="buttons">
+        <button id="pauseButton" class="secondary">Pausar</button>
+        <button id="restartButton" class="secondary">Reiniciar</button>
+        <button id="stopButton" class="secondary">Terminar</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const setupScreen = $("setupScreen");
+    const timerScreen = $("timerScreen");
+    const timeInputs = ["prep", "work", "restRound", "restCycle"];
+    let plan = [];
+    let currentIndex = 0;
+    let segmentEndsAt = 0;
+    let remainingWhenPaused = 0;
+    let paused = false;
+    let finished = false;
+    let ticker = null;
+    let audioContext = null;
+    let totalSeconds = 0;
+    let elapsedBeforeCurrent = 0;
+    let lastCountdownSecond = null;
+
+    function parseTime(value) {
+      const match = String(value).trim().match(/^(\d{1,3}):(\d{1,2})$/);
+      if (!match) return null;
+      const minutes = Number(match[1]);
+      const seconds = Number(match[2]);
+      if (seconds > 59) return null;
+      return minutes * 60 + seconds;
+    }
+
+    function formatTime(total) {
+      total = Math.max(0, Math.ceil(total));
+      const minutes = Math.floor(total / 60);
+      const seconds = total % 60;
+      return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    }
+
+    function readSettings() {
+      const values = {};
+      for (const id of timeInputs) {
+        values[id] = parseTime($(id).value);
+        if (values[id] === null) {
+          throw new Error(`El campo "${labelFor(id)}" debe tener formato mm:ss, por ejemplo 01:30.`);
+        }
+      }
+      for (const id of ["work", "prep"]) {
+        if (values[id] <= 0) throw new Error(`"${labelFor(id)}" debe ser mayor que 00:00.`);
+      }
+      const rounds = Number($("rounds").value);
+      const cycles = Number($("cycles").value);
+      if (!Number.isInteger(rounds) || rounds < 1) throw new Error("La cantidad de rondas debe ser un entero mayor o igual que 1.");
+      if (!Number.isInteger(cycles) || cycles < 1) throw new Error("La cantidad de ciclos debe ser un entero mayor o igual que 1.");
+      values.rounds = rounds;
+      values.cycles = cycles;
+      return values;
+    }
+
+    function labelFor(id) {
+      return ({
+        prep: "Tiempo de preparación",
+        work: "Tiempo de entrenamiento",
+        restRound: "Descanso entre rondas",
+        restCycle: "Descanso entre ciclos"
+      })[id] || id;
+    }
+
+    function calculateTotal(s) {
+      // Por ciclo: N entrenamientos y N-1 descansos entre rondas.
+      // Entre ciclos hay C-1 descansos.
+      return s.prep
+        + s.cycles * (s.rounds * s.work + (s.rounds - 1) * s.restRound)
+        + (s.cycles - 1) * s.restCycle;
+    }
+
+    function updateTotal() {
+      try {
+        const s = readSettings();
+        const total = calculateTotal(s);
+        $("totalTime").textContent = formatTime(total);
+        $("totalBreakdown").textContent =
+          `${s.cycles} ciclo(s) · ${s.rounds} ronda(s) por ciclo · ${Math.floor(total / 60)} min ${total % 60} s`;
+        $("setupError").textContent = "";
+        $("startButton").disabled = false;
+      } catch (error) {
+        $("totalTime").textContent = "--:--";
+        $("totalBreakdown").textContent = "Revisa los valores introducidos.";
+        $("setupError").textContent = error.message;
+        $("startButton").disabled = true;
+      }
+    }
+
+    function makePlan(s) {
+      const result = [{ type: "prep", label: "Preparación", duration: s.prep, detail: "Prepárate para empezar" }];
+      for (let cycle = 1; cycle <= s.cycles; cycle++) {
+        for (let round = 1; round <= s.rounds; round++) {
+          result.push({
+            type: "work", label: "Entrenamiento", duration: s.work,
+            cycle, round, detail: `Ciclo ${cycle} de ${s.cycles} · Ronda ${round} de ${s.rounds}`
+          });
+          if (round < s.rounds) {
+            result.push({
+              type: "restRound", label: "Descanso", duration: s.restRound,
+              cycle, round, detail: `Ciclo ${cycle} de ${s.cycles} · Descanso antes de la ronda ${round + 1}`
+            });
+          }
+        }
+        if (cycle < s.cycles) {
+          result.push({
+            type: "restCycle", label: "Descanso entre ciclos", duration: s.restCycle,
+            cycle, detail: `Fin del ciclo ${cycle} · Descanso antes del ciclo ${cycle + 1}`
+          });
+        }
+      }
+      return result;
+    }
+
+    function applyPhaseColor(type) {
+      const screen = $("timerScreen");
+
+      screen.classList.remove(
+          "phase-prep",
+          "phase-work",
+          "phase-rest"
+      );
+
+      if (type === "prep") {
+          screen.classList.add("phase-prep");
+      } else if (type === "work") {
+          screen.classList.add("phase-work");
+      } else {
+          screen.classList.add("phase-rest");
+      }
+    }
+
+    function beep(type = "change") {
+      try {
+          const AudioContextClass =
+              window.AudioContext || window.webkitAudioContext;
+
+          if (!audioContext) {
+              audioContext = new AudioContextClass();
+          }
+
+          if (audioContext.state === "suspended") {
+              audioContext.resume();
+          }
+
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+
+          oscillator.connect(gain);
+          gain.connect(audioContext.destination);
+          oscillator.type = "sine";
+
+          if (type === "countdown") {
+              oscillator.frequency.value = 760;
+              gain.gain.value = 0.15;
+
+              oscillator.start();
+              oscillator.stop(audioContext.currentTime + 0.12);
+          } else {
+              oscillator.frequency.value = type === "finish" ? 1100 : 980;
+              gain.gain.value = 0.3;
+
+              oscillator.start();
+              oscillator.stop(audioContext.currentTime + 0.5);
+          }
+      } catch (error) {
+          console.warn("Error al reproducir el sonido:", error);
+      }
+    }
+
+    function renderCurrentSegment() {
+      const segment = plan[currentIndex];
+      $("phaseName").textContent = segment.label;
+      $("phaseDetails").textContent = segment.detail || "";
+      $("clock").textContent = formatTime(segment.duration);
+      $("progressBar").style.width = `${(elapsedBeforeCurrent / totalSeconds) * 100}%`;
+      $("progressLabel").textContent = `Tiempo total: ${formatTime(elapsedBeforeCurrent)} / ${formatTime(totalSeconds)}`;
+    }
+
+    function startSegment(index, shouldBeep = true) {
+      lastCountdownSecond = null;
+      currentIndex = index;
+      if (currentIndex >= plan.length) {
+        finishWorkout();
+        return;
+      }
+      const segment = plan[currentIndex];
+      segmentEndsAt = Date.now() + segment.duration * 1000;
+      applyPhaseColor(segment.type);
+      renderCurrentSegment();
+      if (shouldBeep) beep();
+    }
+
+    function tick() {
+      if (paused || finished) return;
+      let now = Date.now();
+
+      // Si una pestaña queda momentáneamente en segundo plano, avanzar por los segmentos vencidos.
+      while (now >= segmentEndsAt && !finished) {
+        elapsedBeforeCurrent += plan[currentIndex].duration;
+        const nextIndex = currentIndex + 1;
+        if (nextIndex >= plan.length) {
+          finishWorkout();
+          return;
+        }
+        startSegment(nextIndex, true);
+        now = Date.now();
+      }
+
+      const remaining = Math.max(0, (segmentEndsAt - now) / 1000);
+      const secondsLeft = Math.ceil(remaining);
+      if (secondsLeft <= 3 && secondsLeft >= 1 &&
+          secondsLeft !== lastCountdownSecond) {
+
+          lastCountdownSecond = secondsLeft;
+          beep("countdown");
+      }
+      $("clock").textContent = formatTime(remaining);
+      const elapsed = Math.min(totalSeconds, elapsedBeforeCurrent + plan[currentIndex].duration - remaining);
+      $("progressBar").style.width = `${(elapsed / totalSeconds) * 100}%`;
+      $("progressLabel").textContent = `Tiempo total: ${formatTime(elapsed)} / ${formatTime(totalSeconds)}`;
+    }
+
+    function finishWorkout() {
+      finished = true;
+      clearInterval(ticker);
+      $("phaseName").textContent = "¡Entrenamiento completado!";
+      $("clock").textContent = "00:00";
+      $("phaseDetails").textContent = "Buen trabajo. Has terminado todos los ciclos.";
+      $("progressBar").style.width = "100%";
+      $("progressLabel").textContent = `Tiempo total: ${formatTime(totalSeconds)} / ${formatTime(totalSeconds)}`;
+      $("pauseButton").disabled = true;
+      beep("finish");
+    }
+
+    function startWorkout() {
+      try {
+        const settings = readSettings();
+        plan = makePlan(settings);
+        totalSeconds = calculateTotal(settings);
+        currentIndex = 0;
+        elapsedBeforeCurrent = 0;
+        paused = false;
+        finished = false;
+        $("pauseButton").disabled = false;
+        $("pauseButton").textContent = "Pausar";
+        setupScreen.hidden = true;
+        timerScreen.hidden = false;
+        // Inicializa el audio desde el clic del usuario, para permitir sonido en el navegador.
+        if (audioContext && audioContext.state === "suspended") audioContext.resume();
+        startSegment(0, false);
+        beep();
+        clearInterval(ticker);
+        ticker = setInterval(tick, 100);
+        tick();
+      } catch (error) {
+        $("setupError").textContent = error.message;
+      }
+    }
+
+    function togglePause() {
+      if (finished) return;
+      paused = !paused;
+      if (paused) {
+        remainingWhenPaused = Math.max(0, (segmentEndsAt - Date.now()) / 1000);
+        clearInterval(ticker);
+        $("pauseButton").textContent = "Continuar";
+      } else {
+        segmentEndsAt = Date.now() + remainingWhenPaused * 1000;
+        $("pauseButton").textContent = "Pausar";
+        ticker = setInterval(tick, 100);
+        tick();
+      }
+    }
+
+    function stopWorkout() {
+      clearInterval(ticker);
+      paused = false;
+      finished = false;
+      timerScreen.hidden = true;
+      setupScreen.hidden = false;
+      $("pauseButton").disabled = false;
+      updateTotal();
+    }
+
+    for (const id of [...timeInputs, "rounds", "cycles"]) {
+      $(id).addEventListener("input", updateTotal);
+      if (timeInputs.includes(id)) {
+        $(id).addEventListener("blur", () => {
+          const seconds = parseTime($(id).value);
+          if (seconds !== null) $(id).value = formatTime(seconds);
+          updateTotal();
+        });
+      }
+    }
+
+    $("startButton").addEventListener("click", startWorkout);
+    $("pauseButton").addEventListener("click", togglePause);
+    $("restartButton").addEventListener("click", () => {
+      if (plan.length === 0) return;
+      clearInterval(ticker);
+      paused = false;
+      finished = false;
+      elapsedBeforeCurrent = 0;
+      $("pauseButton").disabled = false;
+      $("pauseButton").textContent = "Pausar";
+      startSegment(0, true);
+      ticker = setInterval(tick, 100);
+      tick();
+    });
+    $("stopButton").addEventListener("click", stopWorkout);
+
+    updateTotal();
+  </script>
+</body>
+</html>
