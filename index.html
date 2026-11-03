@@ -2,6 +2,13 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <meta name="theme-color" content="#10131a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HIIT">
+
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Temporizador HIIT</title>
   <style>
@@ -87,19 +94,25 @@
     transition: background-color 250ms ease;
     }
     .timer-screen.phase-prep {
-        background-color: #123f78;
-        border-color: #4d9dff;
-        .phase {color: #4d9dff;}
+    background-color: #123f78;
+    border-color: #4d9dff;
+    }
+    .timer-screen.phase-prep .phase {
+        color: #4d9dff;
     }
     .timer-screen.phase-work {
         background-color: #145b38;
         border-color: #48d597;
-        .phase {color: #48d597;}
+    } 
+    .timer-screen.phase-work .phase {
+        color: #48d597;
     }
     .timer-screen.phase-rest {
         background-color: #7b2028;
         border-color: #ff6974;
-        .phase {color: #ff6974;}
+    }
+    .timer-screen.phase-rest .phase {
+        color: #ff6974;
     }
     .phase {
       display: inline-block;
@@ -508,6 +521,16 @@
     $("stopButton").addEventListener("click", stopWorkout);
 
     updateTotal();
+  </script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js")
+          .catch(error => {
+            console.error("Error registrando la aplicación offline:", error);
+          });
+      });
+    }
   </script>
 </body>
 </html>
